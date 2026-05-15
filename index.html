@@ -6,7 +6,7 @@
     <title>Duel Games Online</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCpVUPnZm2Q0UaFEjAwgEzrgKPwG6VbLec",
@@ -27,10 +27,16 @@
         let currentTurn = 'X';
         let gameActive = false;
 
-        // Проверка при загрузке: если код есть в памяти, возвращаемся в игру
+        // Таймер на случай зависания восстановления
         if (roomCode) {
-            listenToRoom(roomCode);
             showGameScreen("Восстановление игры...");
+            listenToRoom(roomCode);
+            setTimeout(() => {
+                if (!gameActive) {
+                    document.getElementById('status').innerText = "Комната не найдена или удалена";
+                    document.getElementById('force-exit').style.display = 'block';
+                }
+            }, 5000);
         }
 
         window.createGame = () => {
@@ -43,7 +49,7 @@
                 status: 'waiting'
             });
             listenToRoom(code);
-            showGameScreen(`Код: ${code}. Ждем друга...`);
+            showGameScreen(`Код: ${code}. Ожидание...`);
         };
 
         window.joinGame = () => {
@@ -57,18 +63,16 @@
             }
         };
 
-        // Кнопка выхода в меню
         window.leaveGame = () => {
-            if (confirm("Выйти в меню? Игра будет прервана.")) {
+            if (confirm("Выйти в меню?")) {
                 localStorage.clear();
                 location.reload();
             }
         };
 
-        // Кнопка "Сдаться"
         window.surrender = () => {
             if (!gameActive) return;
-            if (confirm("Вы уверены, что хотите сдаться?")) {
+            if (confirm("Сдаться?")) {
                 const winner = mySymbol === 'X' ? 'O' : 'X';
                 update(ref(db, 'rooms/' + roomCode), { status: 'win_' + winner });
             }
@@ -84,26 +88,24 @@
         function listenToRoom(code) {
             onValue(ref(db, 'rooms/' + code), (snapshot) => {
                 const data = snapshot.val();
-                if (!data) {
-                    localStorage.clear();
-                    location.reload();
-                    return;
-                }
+                if (!data) return;
 
                 board = JSON.parse(data.board);
                 currentTurn = data.turn;
                 renderBoard();
 
-                if (data.status === 'playing') {
-                    gameActive = true;
-                    document.getElementById('status').innerText = (currentTurn === mySymbol) ? "Ваш ход!" : "Ход противника...";
+                if (data.status === 'playing' || data.status === 'waiting') {
+                    gameActive = (data.status === 'playing');
+                    document.getElementById('status').innerText = (data.status === 'waiting') ? `Код: ${code}. Ждем друга...` : 
+                        (currentTurn === mySymbol ? "Ваш ход!" : "Ход противника...");
                     document.getElementById('game-controls').style.display = 'flex';
+                    document.getElementById('force-exit').style.display = 'none';
                 } else if (data.status.startsWith('win_')) {
                     gameActive = false;
                     const winner = data.status.split('_')[1];
-                    document.getElementById('status').innerText = winner === mySymbol ? "ВЫ ПОБЕДИЛИ!" : "ВЫ ПРОИГРАЛИ!";
+                    document.getElementById('status').innerText = winner === mySymbol ? "ПОБЕДА!" : "ПРОИГРЫШ!";
                     document.getElementById('game-controls').style.display = 'none';
-                    document.getElementById('exit-btn').style.display = 'block';
+                    document.getElementById('force-exit').style.display = 'block';
                 }
             });
         }
@@ -126,17 +128,10 @@
             if (!gameActive || board[r][c] !== '' || currentTurn !== mySymbol) return;
             board[r][c] = mySymbol;
             const nextTurn = mySymbol === 'X' ? 'O' : 'X';
-            
             if (checkWin(r, c, mySymbol)) {
-                update(ref(db, 'rooms/' + roomCode), {
-                    board: JSON.stringify(board),
-                    status: 'win_' + mySymbol
-                });
+                update(ref(db, 'rooms/' + roomCode), { board: JSON.stringify(board), status: 'win_' + mySymbol });
             } else {
-                update(ref(db, 'rooms/' + roomCode), {
-                    board: JSON.stringify(board),
-                    turn: nextTurn
-                });
+                update(ref(db, 'rooms/' + roomCode), { board: JSON.stringify(board), turn: nextTurn });
             }
         }
 
@@ -175,6 +170,7 @@
         input { width: 100%; padding: 10px; box-sizing: border-box; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; text-align: center; }
         #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #555; min-height: 1.2em; }
         #game-controls { display: none; gap: 5px; margin-top: 10px; }
+        #game-controls button { flex: 1; margin-top: 0; }
     </style>
 </head>
 <body>
@@ -190,9 +186,9 @@
             <div id="board"></div>
             <div id="game-controls">
                 <button onclick="surrender()" class="btn-danger">Сдаться</button>
-                <button onclick="leaveGame()" class="btn-secondary">Выйти</button>
+                <button onclick="leaveGame()" class="btn-secondary">Меню</button>
             </div>
-            <button id="exit-btn" onclick="leaveGame()" style="display:none;" class="btn-secondary">В меню</button>
+            <button id="force-exit" onclick="leaveGame()" style="display:none;" class="btn-secondary">Вернуться в меню</button>
         </div>
     </div>
 </body>

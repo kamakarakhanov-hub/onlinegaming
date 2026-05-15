@@ -1,0 +1,220 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Крестики-нолики 10x10</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f4f7f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h1 { font-size: 18px; margin: 0 0 15px 0; text-align: center; color: #1c1c1e; }
+        
+        #lobby, #game { display: none; flex-direction: column; gap: 12px; }
+        .active { display: flex !important; }
+
+        button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.7; }
+        button.secondary { background-color: #8e8e93; }
+
+        input {
+            padding: 12px;
+            border: 1px solid #d1d1d6;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        #status {
+            background: #f2f2f7;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 1px;
+            background-color: #c7c7cc;
+            border: 1px solid #c7c7cc;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
+        .cell {
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell.x { color: #ff3b30; }
+        .cell.o { color: #34c759; }
+        
+        .info { font-size: 12px; color: #8e8e93; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Duel Games</h1>
+        
+        <div id="lobby" class="active">
+            <button onclick="createGame()">Создать новую игру</button>
+            <div style="text-align:center; color:#8e8e93; font-size:12px;">ИЛИ</div>
+            <input type="text" id="gameCode" placeholder="Код комнаты (4 цифры)" maxlength="4">
+            <button class="secondary" onclick="joinGame()">Присоединиться по коду</button>
+        </div>
+
+        <div id="game">
+            <div id="status">Ожидание...</div>
+            <div id="board"></div>
+            <button class="secondary" style="margin-top:15px;" onclick="location.reload()">Выйти в меню</button>
+        </div>
+        
+        <div class="info">Версия 2026.05 (Web Widget)</div>
+    </div>
+
+    <script>
+        let board = [];
+        let mySymbol = '';
+        let currentTurn = 'X';
+        let gameActive = false;
+
+        function createGame() {
+            const code = Math.floor(1000 + Math.random() * 9000);
+            showGame();
+            mySymbol = 'X';
+            document.getElementById('status').innerText = `Код: ${code}. Ждем друга...`;
+            // Имитация входа друга
+            setTimeout(() => {
+                gameActive = true;
+                document.getElementById('status').innerText = "Ваш ход (X)";
+            }, 2500);
+        }
+
+        function joinGame() {
+            const code = document.getElementById('gameCode').value;
+            if(code.length === 4) {
+                showGame();
+                mySymbol = 'O';
+                gameActive = true;
+                document.getElementById('status').innerText = "Игра началась! Ход противника (X)";
+            }
+        }
+
+        function showGame() {
+            document.getElementById('lobby').classList.remove('active');
+            document.getElementById('game').classList.add('active');
+            initBoard();
+        }
+
+        function initBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            board = Array(10).fill(null).map(() => Array(10).fill(''));
+            
+            for(let r=0; r<10; r++) {
+                for(let c=0; c<10; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.onclick = () => makeMove(r, c, cell);
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function makeMove(r, c, el) {
+            if(!gameActive || board[r][c] !== '' || currentTurn !== mySymbol) return;
+            
+            board[r][c] = mySymbol;
+            el.innerText = mySymbol;
+            el.classList.add(mySymbol.toLowerCase());
+            
+            if(checkWin(r, c, mySymbol)) {
+                document.getElementById('status').innerText = "ПОБЕДА!";
+                gameActive = false;
+                return;
+            }
+
+            currentTurn = mySymbol === 'X' ? 'O' : 'X';
+            document.getElementById('status').innerText = "Ход противника...";
+            
+            // Простейший бот-имитатор для теста
+            setTimeout(() => {
+                botMove();
+            }, 1000);
+        }
+
+        function botMove() {
+            if(!gameActive) return;
+            for(let r=0; r<10; r++) {
+                for(let c=0; c<10; c++) {
+                    if(board[r][c] === '') {
+                        board[r][c] = currentTurn;
+                        const cells = document.querySelectorAll('.cell');
+                        const target = cells[r*10 + c];
+                        target.innerText = currentTurn;
+                        target.classList.add(currentTurn.toLowerCase());
+                        
+                        if(checkWin(r, c, currentTurn)) {
+                            document.getElementById('status').innerText = "Проигрыш!";
+                            gameActive = false;
+                        } else {
+                            currentTurn = mySymbol;
+                            document.getElementById('status').innerText = "Ваш ход!";
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        function checkWin(row, col, p) {
+            const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+            for(let [dr, dc] of dirs) {
+                let count = 1;
+                for(let s of [1, -1]) {
+                    let r = row + dr*s, c = col + dc*s;
+                    while(r>=0 && r<10 && c>=0 && c<10 && board[r][c] === p) {
+                        count++; r += dr*s; c += dc*s;
+                    }
+                }
+                if(count >= 5) return true;
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>
